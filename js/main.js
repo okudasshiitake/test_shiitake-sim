@@ -6,6 +6,8 @@
 let bgmAudio = null;
 let bgmPlaying = false;
 let currentBgmIndex = 0;
+let bgmGainNode = null;  // BGM音量制御用
+let bgmSource = null;    // BGMソースノード
 const bgmList = [
     { file: 'bgm1.mp3', name: 'BGM 1', volume: 0.05 },
     { file: 'bgm2.mp3', name: 'BGM 2', volume: 0.05 },
@@ -59,11 +61,14 @@ function startBgm(index) {
         return;
     }
 
-    // 新しいオーディオを作成
+    // 既存のBGMを停止
     if (bgmAudio) {
         bgmAudio.pause();
         bgmAudio.src = '';
-        bgmAudio = null;
+    }
+    if (bgmSource) {
+        try { bgmSource.disconnect(); } catch (e) { }
+        bgmSource = null;
     }
 
     const currentBgm = bgmList[currentBgmIndex];
@@ -71,11 +76,26 @@ function startBgm(index) {
 
     bgmAudio = new Audio(currentBgm.file);
     bgmAudio.loop = true;
-    bgmAudio.volume = currentBgm.volume || 0.10;
 
     // モバイル対応: playsinline属性を追加
     bgmAudio.setAttribute('playsinline', '');
     bgmAudio.setAttribute('webkit-playsinline', '');
+
+    // Web Audio APIで音量制御（モバイル対応）
+    if (audioCtx) {
+        try {
+            bgmSource = audioCtx.createMediaElementSource(bgmAudio);
+            bgmGainNode = audioCtx.createGain();
+            bgmGainNode.gain.value = currentBgm.volume || 0.10;
+            bgmSource.connect(bgmGainNode);
+            bgmGainNode.connect(audioCtx.destination);
+        } catch (e) {
+            // フォールバック: 通常のvolume設定
+            bgmAudio.volume = currentBgm.volume || 0.10;
+        }
+    } else {
+        bgmAudio.volume = currentBgm.volume || 0.10;
+    }
 
     bgmAudio.play().then(() => {
         bgmPlaying = true;
