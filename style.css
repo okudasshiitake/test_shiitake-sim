@@ -3094,3 +3094,10 @@ body {
     font-weight: bold;
     margin-left: 5px;
 }
+
+/* スマホでチュートリアルボタンの順序を入れ替え */
+@media (max-width: 600px) {
+    .tutorial-actions {
+        flex-direction: column-reverse;
+    }
+}
