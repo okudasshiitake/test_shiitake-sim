@@ -23,17 +23,23 @@ const bgmList = [
     { file: 'bgm14.mp3', name: 'BGM 14', volume: 0.10 },
     { file: 'bgm15.mp3', name: 'BGM 15', volume: 0.10 }
 ];
-const audioCtx = typeof AudioContext !== 'undefined' ? new AudioContext() : null;
+const audioCtx = typeof AudioContext !== 'undefined' ? new AudioContext() : (typeof webkitAudioContext !== 'undefined' ? new webkitAudioContext() : null);
 
 function playSound(type) {
     if (!gameState.soundEnabled || !audioCtx) return;
+
+    // モバイル対応: AudioContextが一時停止中なら再開
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+
     const osc = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     osc.connect(g);
     g.connect(audioCtx.destination);
     const freqs = { harvest: 800, water: 400, buy: 600 };
     osc.frequency.value = freqs[type] || 500;
-    g.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    g.gain.setValueAtTime(0.15, audioCtx.currentTime);  // モバイルでは少し低めに
     g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
     osc.start();
     osc.stop(audioCtx.currentTime + 0.3);
@@ -41,6 +47,11 @@ function playSound(type) {
 
 function startBgm(index) {
     if (index !== undefined) currentBgmIndex = index;
+
+    // モバイル対応: AudioContextが一時停止中なら再開
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 
     // 既存のオーディオがあり、同じBGMなら再開
     if (bgmAudio && index === undefined) {
@@ -61,6 +72,10 @@ function startBgm(index) {
     bgmAudio = new Audio(currentBgm.file);
     bgmAudio.loop = true;
     bgmAudio.volume = currentBgm.volume || 0.10;
+
+    // モバイル対応: playsinline属性を追加
+    bgmAudio.setAttribute('playsinline', '');
+    bgmAudio.setAttribute('webkit-playsinline', '');
 
     bgmAudio.play().then(() => {
         bgmPlaying = true;
@@ -571,6 +586,12 @@ function setupEvents() {
     safeClick('advanceWeek', advanceOneWeek);
     safeClick('confirmInoculate', startInoculateGame);
     safeClick('cancelInoculate', () => closeModal('inoculateModal'));
+    safeClick('buySporesBtn', () => {
+        closeModal('inoculateModal');
+        currentShopTab = 'spores';
+        openModal('shopModal');
+        renderShop();
+    });
     safeClick('confirmFuse', confirmFuse);
     safeClick('cancelFuse', () => closeModal('fuseModal'));
 
@@ -616,6 +637,7 @@ function setupEvents() {
         updateAudioButtonStates();
     });
     safeClick('shareGame', shareGame);
+    safeClick('openEcSite', openEcSite);
 
     safeClick('closeHelp', () => closeModal('helpModal'));
     safeClick('helpButton', () => openModal('tutorialModal')); // ヘルプボタンでチュートリアル表示
@@ -637,6 +659,9 @@ function setupEvents() {
     safeClick('confirmCancel', () => {
         closeModal('confirmModal');
         confirmCallback = null;
+        // OKボタンを再表示（ECサイト用に非表示にした場合）
+        const confirmOk = $('confirmOk');
+        if (confirmOk) confirmOk.style.display = '';
     });
 }
 
@@ -1183,7 +1208,7 @@ function batchSoak() {
 function batchHarvest() {
     if (!Array.isArray(gameState.inventory)) gameState.inventory = [];
 
-    let total = 0, weight = 0;
+    let total = 0, weight = 0, contamCount = 0, contamCost = 0;
     const season = getSeason();
 
     gameState.logs.forEach(log => {
@@ -1192,7 +1217,9 @@ function batchHarvest() {
             if (mature.length > 0) {
                 mature.forEach(m => {
                     if (m.isContaminated || m.type === 'contaminated') {
-                        gameState.totalMoney -= 30;
+                        gameState.totalMoney -= CONTAMINATED_DISPOSAL_FEE;
+                        contamCount++;
+                        contamCost += CONTAMINATED_DISPOSAL_FEE;
                     } else {
                         // グレード決定（冬季で2日以内=どんこ、成熟3日以上=こうしん）
                         let grade = 'normal';
@@ -1203,11 +1230,11 @@ function batchHarvest() {
                             grade = 'koushin';
                         }
 
-                        gameState.inventory.push({ type: m.type, grade, weight: m.weight });
+                        gameState.inventory.push({ type: m.type, grade, weight: m.weight, harvestedDay: gameState.day });
                         weight += m.weight;
+                        total++;
                     }
                 });
-                total += mature.filter(m => !m.isContaminated && m.type !== 'contaminated').length;
                 log.mushrooms = log.mushrooms.filter(m => m.stage !== 'mature');
                 const remainingSprout = log.mushrooms.filter(m => m.stage === 'sprout').length;
                 const hasScheduled = (log.scheduled || []).length > 0;
@@ -1218,17 +1245,28 @@ function batchHarvest() {
             }
         }
     });
-    if (total > 0) {
-        gameState.totalHarvestWeight += weight;
-        gameState.totalHarvested = (gameState.totalHarvested || 0) + total;
-        gameState.exp += total * 2;
-        addEvent(`まとめて${total}個(${weight}g)収穫`, 'harvest');
-        showToast('🧺', `${weight}g収穫！`);
+
+    if (total > 0 || contamCount > 0) {
+        if (total > 0) {
+            gameState.totalHarvestWeight += weight;
+            gameState.totalHarvested = (gameState.totalHarvested || 0) + total;
+            gameState.exp += total * 2;
+        }
+
+        let msg = '';
+        if (total > 0) msg = `${total}個(${weight}g)収穫`;
+        if (contamCount > 0) msg += msg ? `、雑菌${contamCount}個処分(-${contamCost}円)` : `雑菌${contamCount}個処分(-${contamCost}円)`;
+
+        addEvent(`まとめて${msg}`, 'harvest');
+        showToast('🧺', msg);
         playSound('harvest');
-    } else { showToast('🌱', '収穫できる椎茸がありません'); }
+    } else {
+        showToast('🌱', '収穫できる椎茸がありません');
+    }
     closeModal('batchModal');
     saveState(); render();
 }
+
 
 // まとめて植菌（人を雇う必要）
 function batchInoculate() {
@@ -1245,31 +1283,109 @@ function batchInoculate() {
     const totalSpores = normalSpores + premiumSpores;
     if (totalSpores === 0) { showToast('🔬', '菌がありません'); return; }
 
+    // 2倍植菌が可能か（同じ種類の菌が2本以上あるか）
+    const canDoubleNormal = normalSpores >= 2;
+    const canDoublePremium = premiumSpores >= 2;
+    const canDouble = canDoubleNormal || canDoublePremium;
+
+    // 確認ダイアログを表示
+    $('confirmTitle').textContent = '🔬 まとめて植菌';
+    $('confirmMessage').innerHTML = `
+        <p>原木${rawLogs.length}本に植菌します</p>
+        <p style="font-size:0.85rem; color:#aaa;">所持菌: 普通${normalSpores}本 / 高級${premiumSpores}本</p>
+        <div style="margin-top:15px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+            <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="batchDoubleCheck" ${!canDouble ? 'disabled' : ''}>
+                <span>🔬 2倍植菌（菌2本/原木）</span>
+            </label>
+            <p style="font-size:0.75rem; color:#aaa; margin-top:5px;">
+                2倍の穴を開け、発生量1.5倍＆良品質率+10%
+                ${!canDouble ? '<br><span style="color:#ff9800;">※同じ菌を2本以上必要</span>' : ''}
+            </p>
+        </div>
+    `;
+
+    // 確認ボタンのコールバック
+    confirmCallback = () => {
+        const isDouble = document.getElementById('batchDoubleCheck')?.checked || false;
+        executeBatchInoculate(rawLogs, isDouble);
+    };
+    openModal('confirmModal');
+}
+
+function executeBatchInoculate(rawLogs, isDouble) {
+    const month = getMonth();
     let count = 0;
+    let doubleCount = 0;
+
     rawLogs.forEach(log => {
-        if (gameState.shopStock.sporesPremium > 0) {
-            gameState.shopStock.sporesPremium--;
+        // 必要な菌の数（2倍なら2本、通常なら1本）
+        const required = isDouble ? 2 : 1;
+
+        // 高級菌優先で使用
+        if (gameState.shopStock.sporesPremium >= required) {
+            gameState.shopStock.sporesPremium -= required;
             log.sporeType = 'premium';
-        } else if (gameState.shopStock.sporesNormal > 0) {
-            gameState.shopStock.sporesNormal--;
+        } else if (gameState.shopStock.sporesNormal >= required) {
+            gameState.shopStock.sporesNormal -= required;
             log.sporeType = 'normal';
-        } else return;
+        } else if (isDouble) {
+            // 2倍植菌できないが通常植菌は可能か確認
+            if (gameState.shopStock.sporesPremium >= 1) {
+                gameState.shopStock.sporesPremium -= 1;
+                log.sporeType = 'premium';
+                // 通常植菌として処理
+                log.spawnMultiplier = 1.0;
+                log.doubleInoculateBonus = 0;
+            } else if (gameState.shopStock.sporesNormal >= 1) {
+                gameState.shopStock.sporesNormal -= 1;
+                log.sporeType = 'normal';
+                log.spawnMultiplier = 1.0;
+                log.doubleInoculateBonus = 0;
+            } else {
+                return; // 菌切れ
+            }
+            log.stage = 'kariFuse';
+            log.fuseDays = 0;
+            log.inoculatedMonth = month;
+            log.inoculatedOffSeason = month > 5;
+            count++;
+            return;
+        } else {
+            return; // 菌切れ
+        }
 
         log.stage = 'kariFuse';
         log.fuseDays = 0;
         log.inoculatedMonth = month;
         log.inoculatedOffSeason = month > 5;
+
+        // 2倍植菌の効果を設定
+        if (isDouble && (log.sporeType === 'premium' ? gameState.shopStock.sporesPremium >= 0 : gameState.shopStock.sporesNormal >= 0)) {
+            log.spawnMultiplier = 1.5;
+            log.doubleInoculateBonus = 0.1;
+            doubleCount++;
+        } else {
+            log.spawnMultiplier = 1.0;
+            log.doubleInoculateBonus = 0;
+        }
         count++;
     });
 
     if (count > 0) {
-        addEvent(`${count}本まとめて植菌→仮伏せ開始`, 'info');
-        showToast('🔬', `${count}本植菌完了！`);
+        if (doubleCount > 0) {
+            addEvent(`${count}本まとめて植菌（2倍:${doubleCount}本）→仮伏せ開始`, 'info');
+            showToast('🔬', `${count}本植菌完了！（2倍:${doubleCount}本）`);
+        } else {
+            addEvent(`${count}本まとめて植菌→仮伏せ開始`, 'info');
+            showToast('🔬', `${count}本植菌完了！`);
+        }
         playSound('buy');
     }
     closeModal('batchModal');
     saveState(); render();
 }
+
 
 // まとめて天地返し（人を雇う必要）
 function batchTenchi() {
@@ -1538,6 +1654,32 @@ function shareGame() {
         const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
         window.open(lineUrl, '_blank');
     }
+}
+
+function openEcSite() {
+    $('confirmTitle').textContent = '🛒 公式ECサイトへ移動';
+    $('confirmMessage').innerHTML = `
+        <p>あわじのきのこや(奥田製作所)公式ECサイトに移動します。</p>
+        <p style="font-size:0.85rem; color:#aaa;">※外部サイトに移動します</p>
+        <p style="margin-top:10px; font-size:0.9rem;">本物の植菌機や椎茸原木を購入できます！🍄‍🟫</p>
+        <div style="margin-top:20px; display:flex; gap:20px; justify-content:center;">
+            <button class="btn btn-primary" onclick="window.open('https://kinshoku.shop-pro.jp', '_blank'); closeEcModal();">🛒 カラーミーショップ</button>
+            <button class="btn btn-primary" style="background: linear-gradient(135deg, #ff4444, #cc0000);" onclick="window.open('https://mercari-shops.com/shops/sLy2W848Ug2egNA3PGzi7Z', '_blank'); closeEcModal();">📦 メルカリショップ</button>
+        </div>
+    `;
+    // OKボタンを無効化（キャンセルのみ使用）
+    confirmCallback = null;
+    openModal('confirmModal');
+    // OKボタンを非表示に
+    const confirmOk = $('confirmOk');
+    if (confirmOk) confirmOk.style.display = 'none';
+}
+
+function closeEcModal() {
+    closeModal('confirmModal');
+    // OKボタンを再表示
+    const confirmOk = $('confirmOk');
+    if (confirmOk) confirmOk.style.display = '';
 }
 
 function restartGame() {

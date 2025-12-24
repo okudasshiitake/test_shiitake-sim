@@ -81,7 +81,7 @@ function renderStatus() {
         stickyProgressFill.style.width = progress + '%';
 
         // 現在の季節に応じた色
-        const seasonColors = { winter: '#b0bec5', spring: '#81c784', summer: '#64b5f6', autumn: '#ffb74d' };
+        const seasonColors = { winter: '#b3e5fc', spring: '#81c784', summer: '#64b5f6', autumn: '#ffb74d' };
         stickyProgressFill.style.background = seasonColors[season.id] || '#4caf50';
     }
 }
@@ -94,9 +94,9 @@ function updateSeasonProgressBar() {
     const totalDays = 1095;
     const currentDay = gameState.day;
 
-    // 四季の色: 冬=白系、春=緑、夏=青、秋=オレンジ
+    // 四季の色: 冬=薄い水色、春=緑、夏=青、秋=オレンジ
     const seasonColors = {
-        winter: '#b0bec5',  // 白系グレー
+        winter: '#b3e5fc',  // 薄い水色
         spring: '#81c784',  // 緑
         summer: '#64b5f6',  // 青
         autumn: '#ffb74d'   // オレンジ

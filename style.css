@@ -117,7 +117,7 @@ body.season-autumn::after {
 }
 
 body.season-winter {
-    background: linear-gradient(180deg, #eceff1 0%, #b0bec5 30%, #546e7a 100%);
+    background: linear-gradient(180deg, #ffffff 0%, #e3f2fd 30%, #b3e5fc 70%, #81d4fa 100%);
 }
 
 body.season-winter::before {

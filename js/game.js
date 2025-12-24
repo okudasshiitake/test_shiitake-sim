@@ -467,9 +467,15 @@ function updateActiveLog(log, season, month, hasGreenhouse) {
         } else if (m.stage === 'mature') {
             m.matureDays++;
             if (m.matureDays >= rotDays) {
-                gameState.totalMoney -= ROTTEN_PENALTY;
-                gameState.rottenCount++;
-                addEvent(`${log.name}の椎茸が腐った -${ROTTEN_PENALTY}円`, 'weather');
+                // 雑菌と通常椎茸で処分代を分ける
+                if (m.isContaminated || m.type === 'contaminated') {
+                    gameState.totalMoney -= CONTAMINATED_DISPOSAL_FEE;
+                    addEvent(`${log.name}の雑菌キノコが消えた -${CONTAMINATED_DISPOSAL_FEE}円`, 'weather');
+                } else {
+                    gameState.totalMoney -= ROTTEN_PENALTY;
+                    gameState.rottenCount++;
+                    addEvent(`${log.name}の椎茸が腐った -${ROTTEN_PENALTY}円`, 'weather');
+                }
                 return false;
             }
         }
@@ -611,6 +617,10 @@ function scheduleMushrooms(log, season, natural = false) {
     if (isOldLog) count = Math.ceil(count * 0.5);
     if (isWinter && !hasStove) count = Math.ceil(count * 0.5);
 
+    // 2倍植菌による発生量倍率を適用
+    const spawnMultiplier = log.spawnMultiplier || 1.0;
+    count = Math.ceil(count * spawnMultiplier);
+
     for (let i = 0; i < count; i++) {
         const size = rollSize();
         log.scheduled = log.scheduled || [];
@@ -638,6 +648,8 @@ function determineQuality(log) {
     const pestPenalty = (log.pestPenalty || 0) / 100;
     // クヌギ原木ボーナス
     const logQualityBonus = (log.logQuality || 1.0) - 1.0; // 1.2なら0.2
+    // 2倍植菌ボーナス
+    const doubleInoculateBonus = log.doubleInoculateBonus || 0;
 
     // シーズン外は固定
     if (offSeason) {
@@ -652,7 +664,7 @@ function determineQuality(log) {
     const baseGood = log.sporeType === 'premium' ? 0.5 : 0.3;
 
     // 良の確率を計算（全てのペナルティ・ボーナスを適用）
-    const goodChance = Math.max(0, Math.min(baseGood + tenchiBonus + logQualityBonus - wateringPenalty - beetlePenalty - pestPenalty, 0.95));
+    const goodChance = Math.max(0, Math.min(baseGood + tenchiBonus + logQualityBonus + doubleInoculateBonus - wateringPenalty - beetlePenalty - pestPenalty, 0.95));
 
     // getQualityProbabilitiesと同じロジックで他の確率を計算
     let normalChance, contamChance, failedChance;
@@ -700,6 +712,8 @@ function getQualityProbabilities(log) {
     const shadenetBonus = gameState.ownedItems.includes('shadenet') ? 20 : 0;
     // クヌギ原木ボーナス: 良ほだ確率+20%
     const logQualityBonus = Math.round(((log.logQuality || 1.0) - 1.0) * 100); // 1.2なら20
+    // 2倍植菌ボーナス: 良ほだ確率+10%
+    const doubleInoculateBonus = Math.round((log.doubleInoculateBonus || 0) * 100);
 
     // シーズン外は固定
     if (offSeason) {
@@ -710,7 +724,7 @@ function getQualityProbabilities(log) {
     const baseGood = log.sporeType === 'premium' ? 50 : 30;
 
     // 良の確率を計算（全てのペナルティ・ボーナスを適用）
-    let good = Math.max(0, Math.min(baseGood + tenchiBonus + shadenetBonus + logQualityBonus - wateringPenalty - beetlePenalty - pestPenalty, 95));
+    let good = Math.max(0, Math.min(baseGood + tenchiBonus + shadenetBonus + logQualityBonus + doubleInoculateBonus - wateringPenalty - beetlePenalty - pestPenalty, 95));
 
     let normal, contam, failed;
 

@@ -9,6 +9,7 @@ let gamePhase = 'drilling';
 let gameCount = 0;
 const GAME_TOTAL = 10;
 let selectedSporeType = 'normal';
+let doubleInoculate = false; // 2倍植菌モード
 let holdInterval = null; // 長押し用タイマー
 
 // 収穫
@@ -74,8 +75,14 @@ function harvestMushroom(logId, index, e) {
 function harvestLog(logId) {
     const log = gameState.logs.find(l => l.id === logId);
     if (!log || log.restDays > 0) return;
+
     const mature = log.mushrooms.filter(m => m.stage === 'mature' && !m.isContaminated && m.type !== 'contaminated');
-    if (mature.length === 0) { showToast('🌱', '収穫できる椎茸がありません'); return; }
+    const contaminated = log.mushrooms.filter(m => m.stage === 'mature' && (m.isContaminated || m.type === 'contaminated'));
+
+    if (mature.length === 0 && contaminated.length === 0) {
+        showToast('🌱', '収穫できる椎茸がありません');
+        return;
+    }
 
     // 配列形式に対応
     if (!Array.isArray(gameState.inventory)) gameState.inventory = [];
@@ -83,6 +90,7 @@ function harvestLog(logId) {
     let weight = 0;
     const season = getSeason();
 
+    // 通常椎茸を収穫
     mature.forEach(m => {
         // こうしん/どんこ判定
         const matureDays = m.matureDays || 0;
@@ -97,34 +105,55 @@ function harvestLog(logId) {
         weight += m.weight;
     });
 
-    gameState.totalHarvestWeight += weight;
-    gameState.totalHarvested = (gameState.totalHarvested || 0) + mature.length;
-    gameState.exp += mature.length * 2;
-    gameState.monthlyHarvest[getMonth() - 1] += weight;
-    gameState.harvestCount = (gameState.harvestCount || 0) + 1;
+    // 雑菌を処分
+    let contamCost = 0;
+    if (contaminated.length > 0) {
+        contamCost = contaminated.length * CONTAMINATED_DISPOSAL_FEE;
+        gameState.totalMoney -= contamCost;
+    }
 
-    // 統計データ更新
-    if (!gameState.stats) gameState.stats = { totalHarvest: 0, totalSales: 0, totalLogsPlanted: 0, harvestBySize: { small: 0, medium: 0, large: 0, deformed: 0 } };
-    gameState.stats.totalHarvest += mature.length;
-    mature.forEach(m => { gameState.stats.harvestBySize[m.type] = (gameState.stats.harvestBySize[m.type] || 0) + 1; });
+    if (mature.length > 0) {
+        gameState.totalHarvestWeight += weight;
+        gameState.totalHarvested = (gameState.totalHarvested || 0) + mature.length;
+        gameState.exp += mature.length * 2;
+        gameState.monthlyHarvest[getMonth() - 1] += weight;
+        gameState.harvestCount = (gameState.harvestCount || 0) + 1;
 
-    log.mushrooms = log.mushrooms.filter(m => m.stage !== 'mature' || m.isContaminated || m.type === 'contaminated');
+        // 統計データ更新
+        if (!gameState.stats) gameState.stats = { totalHarvest: 0, totalSales: 0, totalLogsPlanted: 0, harvestBySize: { small: 0, medium: 0, large: 0, deformed: 0 } };
+        gameState.stats.totalHarvest += mature.length;
+        mature.forEach(m => { gameState.stats.harvestBySize[m.type] = (gameState.stats.harvestBySize[m.type] || 0) + 1; });
+    }
+
+    // すべての成熟椎茸を削除（雑菌含む）
+    log.mushrooms = log.mushrooms.filter(m => m.stage !== 'mature');
 
     const remainingSprouts = log.mushrooms.filter(m => m.stage === 'sprout').length;
     const hasScheduled = (log.scheduled || []).length > 0;
+
+    // メッセージ生成
+    let msg = '';
+    if (mature.length > 0) {
+        msg = `${mature.length}個(${weight}g)収穫`;
+    }
+    if (contaminated.length > 0) {
+        msg += msg ? `、雑菌${contaminated.length}個処分(-${contamCost}円)` : `雑菌${contaminated.length}個処分(-${contamCost}円)`;
+    }
+
     if (remainingSprouts === 0 && log.mushrooms.length === 0 && !hasScheduled) {
         log.restDays = REST_DAYS;
         log.hasSoaked = false;
-        addEvent(`${log.name}から${mature.length}個(${weight}g)収穫`, 'harvest');
-        showToast('🧺', `${weight}g収穫！30日休養開始`);
+        addEvent(`${log.name}から${msg}`, 'harvest');
+        showToast('🧺', `${msg}！30日休養開始`);
     } else {
-        addEvent(`${log.name}から${mature.length}個(${weight}g)収穫（芽${remainingSprouts}個残り）`, 'harvest');
-        showToast('🧺', `${weight}g収穫！芽が残っています`);
+        addEvent(`${log.name}から${msg}（芽${remainingSprouts}個残り）`, 'harvest');
+        showToast('🧺', `${msg}！芽が残っています`);
     }
     playSound('harvest');
     checkAchievements();
     saveState(); render();
 }
+
 
 // 浸水
 function soakLog(logId) {
@@ -146,16 +175,34 @@ function soakLog(logId) {
 function openInoculate(logId) {
     inoculateLogId = logId;
     const log = gameState.logs.find(l => l.id === logId);
+    const normalStock = gameState.shopStock.sporesNormal || 0;
+    const premiumStock = gameState.shopStock.sporesPremium || 0;
+
+    // 2倍植菌が選択可能かチェック
+    const canDoubleNormal = normalStock >= 2;
+    const canDoublePremium = premiumStock >= 2;
+
     $('inoculateInfo').innerHTML = `
         <p>🪵 ${log.name}に菌を植えます</p>
-        <p>所持菌: 普通 ${gameState.shopStock.sporesNormal || 0}本 / 高級 ${gameState.shopStock.sporesPremium || 0}本</p>
+        <p>所持菌: 普通 ${normalStock}本 / 高級 ${premiumStock}本</p>
         <div style="margin-top:10px;">
             <label><input type="radio" name="sporeType" value="normal" ${selectedSporeType !== 'premium' ? 'checked' : ''}> 普通の菌</label><br>
             <label><input type="radio" name="sporeType" value="premium" ${selectedSporeType === 'premium' ? 'checked' : ''}> 高級菌</label>
         </div>
+        <div style="margin-top:15px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+            <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="doubleInoculateCheck" ${(!canDoubleNormal && !canDoublePremium) ? 'disabled' : ''}>
+                <span>🔬 2倍植菌（菌2本使用）</span>
+            </label>
+            <p style="font-size:0.75rem; color:#aaa; margin-top:5px;">
+                2倍の穴を開け、発生量1.5倍＆良品質率+10%
+                ${(!canDoubleNormal && !canDoublePremium) ? '<br><span style="color:#ff9800;">※同じ菌を2本以上持っていると選択可能</span>' : ''}
+            </p>
+        </div>
     `;
     openModal('inoculateModal');
 }
+
 
 function startInoculateGame() {
     const log = gameState.logs.find(l => l.id === inoculateLogId);
@@ -163,8 +210,16 @@ function startInoculateGame() {
     showFirstTimeHelp('inoculate');
     selectedSporeType = document.querySelector('input[name="sporeType"]:checked').value;
     const stockKey = selectedSporeType === 'premium' ? 'sporesPremium' : 'sporesNormal';
-    if (!gameState.shopStock[stockKey] || gameState.shopStock[stockKey] <= 0) {
-        showToast('❌', '菌がありません'); return;
+
+    // 2倍植菌チェック
+    const doubleCheck = document.getElementById('doubleInoculateCheck');
+    doubleInoculate = doubleCheck && doubleCheck.checked;
+
+    // 菌の在庫チェック
+    const requiredStock = doubleInoculate ? 2 : 1;
+    if (!gameState.shopStock[stockKey] || gameState.shopStock[stockKey] < requiredStock) {
+        showToast('❌', doubleInoculate ? '菌が2本必要です' : '菌がありません');
+        return;
     }
 
     // チュートリアル中のオーバーレイをクリアして次へ進む
@@ -175,22 +230,25 @@ function startInoculateGame() {
 
     closeModal('inoculateModal');
 
+    // 2倍植菌時の初期化
+    inoculateSide = 'front';
+
     // オクダの植菌機を持っていれば簡易モード
     const hasOkudaMachine = gameState.ownedItems.includes('okudaMachine');
 
     if (hasOkudaMachine) {
         // なぞるだけモード
         gamePhase = 'okuda'; gameCount = 0;
-        $('gameTitle').textContent = '🔧 オクダの植菌機';
-        $('gameInstruction').textContent = '原木に穴あけ＆植菌！';
+        $('gameTitle').textContent = doubleInoculate ? '🔧 オクダの植菌機（表側）' : '🔧 オクダの植菌機';
+        $('gameInstruction').textContent = doubleInoculate ? '表側に穴あけ＆植菌！' : '原木に穴あけ＆植菌！';
         $('gameProgress').textContent = '0';
         $('gameTotal').textContent = GAME_TOTAL;
         $('gameHoles').innerHTML = '';
     } else {
         // 通常モード
         gamePhase = 'drilling'; gameCount = 0;
-        $('gameTitle').textContent = '🔩 穴あけ作業';
-        $('gameInstruction').textContent = '原木をタップして穴を開けよう！';
+        $('gameTitle').textContent = doubleInoculate ? '🔩 穴あけ作業（表側）' : '🔩 穴あけ作業';
+        $('gameInstruction').textContent = doubleInoculate ? '表側に穴を開けよう！' : '原木をタップして穴を開けよう！';
         $('gameProgress').textContent = '0';
         $('gameTotal').textContent = GAME_TOTAL;
         $('gameHoles').innerHTML = '';
@@ -198,9 +256,12 @@ function startInoculateGame() {
     openModal('inoculateGameModal');
     playSound('water');
 }
+// 2倍植菌時の状態管理（表側/裏側）
+let inoculateSide = 'front'; // 'front' or 'back'
 
 function handleGameTap() {
-    if (gameCount >= GAME_TOTAL) return;
+    const sideHoleCount = GAME_TOTAL; // 片面10穴
+    if (gameCount >= sideHoleCount) return;
     gameCount++;
     $('gameProgress').textContent = gameCount;
 
@@ -214,8 +275,22 @@ function handleGameTap() {
         hole.style.cssText = `position:absolute;left:${8 + col * 17 + (row % 2 === 1 ? 8.5 : 0)}%;top:${30 + row * 35}%`;
         $('gameHoles').appendChild(hole);
         playSound('buy');
-        if (gameCount >= GAME_TOTAL) {
-            setTimeout(() => { closeModal('inoculateGameModal'); finishInoculate(); }, 500);
+
+        if (gameCount >= sideHoleCount) {
+            if (doubleInoculate && inoculateSide === 'front') {
+                // 2倍植菌：表側完了→裏側へ
+                setTimeout(() => {
+                    inoculateSide = 'back';
+                    gameCount = 0;
+                    $('gameTitle').textContent = '🔧 オクダの植菌機（裏側）';
+                    $('gameInstruction').textContent = '裏側に穴あけ＆植菌！';
+                    $('gameProgress').textContent = '0';
+                    $('gameHoles').innerHTML = '';
+                }, 300);
+            } else {
+                // 完了
+                setTimeout(() => { closeModal('inoculateGameModal'); finishInoculate(); }, 500);
+            }
         }
     } else if (gamePhase === 'drilling') {
         const hole = document.createElement('div');
@@ -226,23 +301,76 @@ function handleGameTap() {
         hole.style.cssText = `position:absolute;left:${8 + col * 17 + (row % 2 === 1 ? 8.5 : 0)}%;top:${30 + row * 35}%`;
         $('gameHoles').appendChild(hole);
         playSound('harvest');
-        if (gameCount >= GAME_TOTAL) {
-            setTimeout(() => {
-                gamePhase = 'inoculating'; gameCount = 0;
-                $('gameTitle').textContent = '🔬 菌打ち込み';
-                $('gameInstruction').textContent = '穴に菌を打ち込もう！';
-                $('gameProgress').textContent = '0';
-            }, 300);
+
+        if (gameCount >= sideHoleCount) {
+            if (doubleInoculate && inoculateSide === 'front') {
+                // 2倍植菌：表側穴あけ完了→裏側穴あけへ
+                setTimeout(() => {
+                    inoculateSide = 'back';
+                    gameCount = 0;
+                    $('gameTitle').textContent = '🔩 穴あけ作業（裏側）';
+                    $('gameInstruction').textContent = '裏側に穴を開けよう！';
+                    $('gameProgress').textContent = '0';
+                    $('gameHoles').innerHTML = '';
+                }, 300);
+            } else {
+                // 穴あけ完了→菌打ち込みへ
+                setTimeout(() => {
+                    gamePhase = 'inoculating';
+                    gameCount = 0;
+                    inoculateSide = 'front'; // 菌打ち込みは表側から
+                    $('gameTitle').textContent = doubleInoculate ? '🔬 菌打ち込み（表側）' : '🔬 菌打ち込み';
+                    $('gameInstruction').textContent = '穴に菌を打ち込もう！';
+                    $('gameProgress').textContent = '0';
+                    $('gameHoles').innerHTML = '';
+                    // 穴を再描画
+                    for (let i = 0; i < sideHoleCount; i++) {
+                        const h = document.createElement('div');
+                        h.className = 'game-hole';
+                        h.textContent = '○';
+                        const r = Math.floor(i / 5);
+                        const c = i % 5;
+                        h.style.cssText = `position:absolute;left:${8 + c * 17 + (r % 2 === 1 ? 8.5 : 0)}%;top:${30 + r * 35}%`;
+                        $('gameHoles').appendChild(h);
+                    }
+                }, 300);
+            }
         }
     } else {
+        // inoculatingフェーズ
         const holes = $('gameHoles').querySelectorAll('.game-hole:not(.filled)');
         if (holes.length > 0) { holes[0].classList.add('filled'); holes[0].textContent = '●'; }
         playSound('buy');
-        if (gameCount >= GAME_TOTAL) {
-            setTimeout(() => { closeModal('inoculateGameModal'); finishInoculate(); }, 500);
+
+        if (gameCount >= sideHoleCount) {
+            if (doubleInoculate && inoculateSide === 'front') {
+                // 2倍植菌：表側菌打ち完了→裏側菌打ちへ
+                setTimeout(() => {
+                    inoculateSide = 'back';
+                    gameCount = 0;
+                    $('gameTitle').textContent = '🔬 菌打ち込み（裏側）';
+                    $('gameInstruction').textContent = '裏側に菌を打ち込もう！';
+                    $('gameProgress').textContent = '0';
+                    $('gameHoles').innerHTML = '';
+                    // 穴を再描画
+                    for (let i = 0; i < sideHoleCount; i++) {
+                        const h = document.createElement('div');
+                        h.className = 'game-hole';
+                        h.textContent = '○';
+                        const r = Math.floor(i / 5);
+                        const c = i % 5;
+                        h.style.cssText = `position:absolute;left:${8 + c * 17 + (r % 2 === 1 ? 8.5 : 0)}%;top:${30 + r * 35}%`;
+                        $('gameHoles').appendChild(h);
+                    }
+                }, 300);
+            } else {
+                // 完了
+                setTimeout(() => { closeModal('inoculateGameModal'); finishInoculate(); }, 500);
+            }
         }
     }
 }
+
 
 // 長押し開始（2秒で5穴 = 400ms間隔）
 function startGameHold() {
@@ -268,14 +396,29 @@ function finishInoculate() {
     const log = gameState.logs.find(l => l.id === inoculateLogId);
     if (!log) return;
     const stockKey = selectedSporeType === 'premium' ? 'sporesPremium' : 'sporesNormal';
-    gameState.shopStock[stockKey]--;
+
+    // 菌を消費（2倍植菌なら2本）
+    const consumeCount = doubleInoculate ? 2 : 1;
+    gameState.shopStock[stockKey] -= consumeCount;
+
     log.stage = 'kariFuse';
     log.fuseDays = 0;
     log.sporeType = selectedSporeType;
     log.inoculatedMonth = getMonth();
     log.inoculatedOffSeason = log.inoculatedMonth > 5;
-    addEvent(`${log.name}に植菌→仮伏せ開始`, 'info');
-    showToast('🔬', '植菌完了！仮伏せ中...');
+
+    // 2倍植菌の効果を記録
+    if (doubleInoculate) {
+        log.spawnMultiplier = 1.5;  // 発生量1.5倍
+        log.doubleInoculateBonus = 0.1;  // 良品質率+10%
+        addEvent(`${log.name}に2倍植菌→仮伏せ開始（発生量1.5倍＆良品質+10%）`, 'info');
+        showToast('🔬', '2倍植菌完了！効果UP！');
+    } else {
+        log.spawnMultiplier = 1.0;
+        log.doubleInoculateBonus = 0;
+        addEvent(`${log.name}に植菌→仮伏せ開始`, 'info');
+        showToast('🔬', '植菌完了！仮伏せ中...');
+    }
     showFirstTimeHelp('kariFuse');
 
     // 統計データ更新

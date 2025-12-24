@@ -181,14 +181,15 @@
             <button class="btn-link" id="nextBgm" title="次の曲">⏭️ 曲変更</button>
             <button class="btn-link btn-audio" id="toggleSound">🔊 SE ON</button>
             <button class="btn-link" id="shareGame">📤 シェア</button>
+            <button class="btn-link" id="openEcSite">🛒 公式ECサイト</button>
         </footer>
     </div>
 
     <!-- ヘルプボタン -->
     <button class="help-button" id="helpButton">❓</button>
 
-    <!-- トースト -->
-    <div class="toast-container" id="toastContainer"></div>
+    <!-- トースト（常に最前面） -->
+    <div class="toast-container" id="toastContainer" style="z-index: 99999;"></div>
     <div class="harvest-effects" id="harvestEffects"></div>
     <!-- チュートリアル -->
     <div class="modal" id="tutorialModal">
@@ -308,9 +309,12 @@
         <div class="modal-content glass-panel">
             <h3>🔬 植菌作業</h3>
             <div class="inoculate-info" id="inoculateInfo"></div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" id="cancelInoculate">キャンセル</button>
-                <button class="btn btn-primary" id="confirmInoculate">作業開始</button>
+            <div class="modal-actions" style="justify-content: space-between;">
+                <button class="btn btn-secondary" style="font-size:0.8rem;" id="buySporesBtn">🛒 菌を買う</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-secondary" id="cancelInoculate">キャンセル</button>
+                    <button class="btn btn-primary" id="confirmInoculate">作業開始</button>
+                </div>
             </div>
         </div>
     </div>
