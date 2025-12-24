@@ -3101,3 +3101,45 @@ body {
         flex-direction: column-reverse;
     }
 }
+
+/* ほだ木置き場セクションヘッダー */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.sort-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.btn-sort {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-sort:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-sort.active {
+    background: var(--color-green);
+    border-color: var(--color-green);
+    color: #fff;
+}
