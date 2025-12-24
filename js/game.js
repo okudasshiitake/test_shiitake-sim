@@ -285,9 +285,21 @@ function advance(days) {
 function updateWeather() {
     const r = Math.random();
     const season = getSeason();
-    gameState.weather = season.isSummer
-        ? (r < 0.6 ? 'sunny' : r < 0.9 ? 'cloudy' : 'storm')
-        : (r < 0.4 ? 'sunny' : r < 0.7 ? 'cloudy' : r < 0.95 ? 'rain' : 'storm');
+    const month = getMonth();
+
+    let newWeather;
+    if (season.isSummer) {
+        newWeather = r < 0.6 ? 'sunny' : r < 0.9 ? 'cloudy' : 'storm';
+    } else {
+        newWeather = r < 0.4 ? 'sunny' : r < 0.7 ? 'cloudy' : r < 0.95 ? 'rain' : 'storm';
+    }
+
+    // 台風(storm)は7-10月のみ発生可能。それ以外は大雨に変更
+    if (newWeather === 'storm' && (month < 7 || month > 10)) {
+        newWeather = 'rain';
+    }
+
+    gameState.weather = newWeather;
 
     if (gameState.weather === 'storm' && !gameState.ownedItems.includes('greenhouse')) {
         gameState.logs.forEach(log => {

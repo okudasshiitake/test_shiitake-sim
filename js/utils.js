@@ -39,15 +39,44 @@ function addEvent(msg, type = 'info') {
     if (gameState.events.length > 30) gameState.events.pop();
 }
 
-// トースト表示
+// トースト表示（同じ内容をまとめる）
+let toastQueue = [];
+let toastFlushTimer = null;
+
 function showToast(icon, message) {
+    const key = `${icon}|${message}`;
+
+    // 既存のキューに同じメッセージがあればカウントアップ
+    const existing = toastQueue.find(t => t.key === key);
+    if (existing) {
+        existing.count++;
+    } else {
+        toastQueue.push({ key, icon, message, count: 1 });
+    }
+
+    // 100ms後にまとめて表示（連続発生をまとめる）
+    if (toastFlushTimer) clearTimeout(toastFlushTimer);
+    toastFlushTimer = setTimeout(flushToasts, 100);
+}
+
+function flushToasts() {
     const container = $('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => toast.classList.add('show'), 10);
-    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2000);
+
+    toastQueue.forEach(item => {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+
+        // 複数ある場合は「x数」を表示
+        const countText = item.count > 1 ? ` <span class="toast-count">x${item.count}</span>` : '';
+        toast.innerHTML = `<span class="toast-icon">${item.icon}</span><span>${item.message}${countText}</span>`;
+
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.add('show'), 10);
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2000);
+    });
+
+    toastQueue = [];
+    toastFlushTimer = null;
 }
 
 // エフェクト

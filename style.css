@@ -199,6 +199,19 @@ body.season-winter::after {
     box-sizing: border-box;
 }
 
+/* ダブルタップズーム防止（スマホ・タブレット対応） */
+button,
+.btn,
+.btn-sticky,
+.btn-sort,
+.btn-action,
+.btn-primary,
+.btn-secondary,
+.btn-auto {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
 body {
     font-family: 'Zen Maru Gothic', sans-serif;
     background: var(--color-bg);
@@ -2194,6 +2207,33 @@ body {
     text-align: right;
 }
 
+/* スマホ用難易度オプション（横1行表示） */
+@media (max-width: 480px) {
+    .difficulty-option {
+        padding: 8px 10px;
+        gap: 8px;
+    }
+
+    .difficulty-label {
+        font-size: 0.85rem;
+    }
+
+    .difficulty-scale {
+        font-size: 0.6rem;
+        margin-right: 5px;
+    }
+
+    .difficulty-money {
+        font-size: 0.85rem;
+    }
+
+    .custom-money-input {
+        width: 70px;
+        padding: 4px 6px;
+        font-size: 0.8rem;
+    }
+}
+
 /* 保険文言・著作権表示 */
 .help-disclaimer {
     margin-top: 15px;
@@ -2231,6 +2271,30 @@ body {
 
     .shop-items {
         grid-template-columns: 1fr;
+    }
+
+    .shop-item {
+        padding: 8px;
+        gap: 8px;
+    }
+
+    .shop-item-icon {
+        font-size: 1.2rem;
+        min-width: 30px;
+    }
+
+    .shop-item-name {
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .shop-item-desc {
+        font-size: 0.65rem;
+    }
+
+    .shop-item-price {
+        font-size: 0.75rem;
+        white-space: nowrap;
     }
 
     .stats-grid {
@@ -2964,18 +3028,39 @@ body {
 /* スマホ対応 */
 @media (max-width: 480px) {
     .sticky-header {
-        height: 45px;
-        padding: 0 10px;
+        padding: 0;
+    }
+
+    .sticky-main {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 4px 8px;
+        gap: 2px;
     }
 
     .sticky-info {
-        font-size: 0.7rem;
-        gap: 5px;
+        font-size: 0.65rem;
+        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .sticky-divider {
+        display: none;
+    }
+
+    .sticky-buttons {
+        justify-content: center;
+        gap: 3px;
     }
 
     .btn-sticky {
-        padding: 4px 8px;
-        font-size: 0.65rem;
+        padding: 3px 6px;
+        font-size: 0.6rem;
+    }
+
+    .sticky-progress {
+        height: 3px;
     }
 
     .progress-labels {
@@ -2985,4 +3070,16 @@ body {
     .progress-track {
         height: 4px;
     }
+}
+
+/* トーストカウント表示 */
+.toast-count {
+    display: inline-block;
+    background: var(--color-gold);
+    color: #000;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    margin-left: 5px;
 }
