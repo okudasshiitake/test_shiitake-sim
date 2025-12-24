@@ -740,26 +740,44 @@ function getQualityProbabilities(log) {
     return { good, normal, contam, failed };
 }
 
-// インベントリ更新
+// インベントリ更新（個別管理）
 function updateInventory() {
     const inv = Array.isArray(gameState.inventory) ? gameState.inventory : [];
-    const total = inv.length;
-    if (total > 0) {
-        gameState.inventoryDays++;
-        // 冷蔵庫購入時は10日間、通常は5日間（猫は保存期間に影響しない）
-        const hasRef = gameState.ownedItems.includes('refrigerator');
-        let rotDays = hasRef ? 10 : INVENTORY_ROT_DAYS;
-        if (gameState.hasCat && Math.random() < 0.1) showToast('🐱', 'にゃー♪');
-        if (gameState.inventoryDays >= rotDays) {
-            const penalty = total * ROTTEN_PENALTY;
-            gameState.totalMoney -= penalty;
-            gameState.rottenCount += total;
-            gameState.inventory = [];
-            gameState.inventoryDays = 0;
-            addEvent(`在庫の椎茸が腐った！ -${penalty}円`, 'weather');
-            showToast('🤢', `在庫が腐った -${penalty}円`);
+    if (inv.length === 0) return;
+
+    // 冷蔵庫購入時は10日間、通常は5日間
+    const hasRef = gameState.ownedItems.includes('refrigerator');
+    const rotDays = hasRef ? 10 : INVENTORY_ROT_DAYS;
+
+    // 猫の鳴き声（在庫があれば10%で鳴く）
+    if (gameState.hasCat && Math.random() < 0.1) showToast('🐱', 'にゃー♪');
+
+    // 各椎茸の収穫日をチェックして腐ったものを抽出
+    const rottenItems = [];
+    const freshItems = [];
+
+    inv.forEach(item => {
+        // 古いデータ（harvestedDayがない）は現在日-1として扱う
+        const harvestedDay = item.harvestedDay || (gameState.day - 1);
+        const daysSinceHarvest = gameState.day - harvestedDay;
+
+        if (daysSinceHarvest >= rotDays) {
+            rottenItems.push(item);
+        } else {
+            // 古いデータにはharvestedDayを補完
+            if (!item.harvestedDay) item.harvestedDay = harvestedDay;
+            freshItems.push(item);
         }
-    } else {
-        gameState.inventoryDays = 0;
+    });
+
+    // 腐った椎茸があればペナルティ
+    if (rottenItems.length > 0) {
+        const penalty = rottenItems.length * ROTTEN_PENALTY;
+        gameState.totalMoney -= penalty;
+        gameState.rottenCount += rottenItems.length;
+        gameState.inventory = freshItems;
+        addEvent(`在庫の椎茸${rottenItems.length}個が腐った！ -${penalty}円`, 'weather');
+        showToast('🤢', `在庫${rottenItems.length}個腐った -${penalty}円`);
     }
 }
+

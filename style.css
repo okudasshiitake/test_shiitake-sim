@@ -2942,6 +2942,16 @@ body {
     color: rgba(255, 255, 255, 0.3);
 }
 
+.sticky-stock {
+    color: rgba(255, 255, 255, 0.5);
+    transition: color 0.3s;
+}
+
+.sticky-stock.has-stock {
+    color: var(--color-green);
+    font-weight: bold;
+}
+
 .sticky-buttons {
     display: flex;
     gap: 6px;
@@ -3034,15 +3044,15 @@ body {
     .sticky-main {
         flex-direction: column;
         align-items: stretch;
-        padding: 4px 8px;
-        gap: 2px;
+        padding: 6px 12px;
+        gap: 4px;
     }
 
     .sticky-info {
-        font-size: 0.65rem;
-        gap: 4px;
+        font-size: 0.7rem;
+        gap: 8px;
         flex-wrap: wrap;
-        justify-content: center;
+        justify-content: space-evenly;
     }
 
     .sticky-divider {
@@ -3050,13 +3060,14 @@ body {
     }
 
     .sticky-buttons {
-        justify-content: center;
-        gap: 3px;
+        justify-content: space-evenly;
+        gap: 6px;
+        padding: 0 8px;
     }
 
     .btn-sticky {
-        padding: 3px 6px;
-        font-size: 0.6rem;
+        padding: 5px 10px;
+        font-size: 0.65rem;
     }
 
     .sticky-progress {

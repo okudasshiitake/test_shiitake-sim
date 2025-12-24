@@ -62,6 +62,14 @@ function renderStatus() {
     if (stickyWeather) stickyWeather.textContent = WEATHER[gameState.weather].name;
     if (stickyMoney) stickyMoney.textContent = '💰' + gameState.totalMoney.toLocaleString() + '円';
 
+    // 在庫数を更新
+    const stickyStock = $('stickyStock');
+    if (stickyStock) {
+        const stockCount = Array.isArray(gameState.inventory) ? gameState.inventory.length : 0;
+        stickyStock.textContent = '🍄‍🟫' + stockCount;
+        stickyStock.classList.toggle('has-stock', stockCount > 0);
+    }
+
     // 3年間プログレスバー更新（四季対応）
     updateSeasonProgressBar();
 

@@ -47,7 +47,7 @@ function harvestMushroom(logId, index, e) {
     if (!Array.isArray(gameState.inventory)) {
         gameState.inventory = [];
     }
-    gameState.inventory.push({ type: m.type, grade, weight: m.weight });
+    gameState.inventory.push({ type: m.type, grade, weight: m.weight, harvestedDay: gameState.day });
 
     gameState.totalHarvestWeight += m.weight;
     gameState.totalHarvested = (gameState.totalHarvested || 0) + 1;
@@ -93,7 +93,7 @@ function harvestLog(logId) {
             grade = 'koushin';
         }
 
-        gameState.inventory.push({ type: m.type, grade, weight: m.weight });
+        gameState.inventory.push({ type: m.type, grade, weight: m.weight, harvestedDay: gameState.day });
         weight += m.weight;
     });
 
